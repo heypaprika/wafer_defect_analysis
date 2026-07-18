@@ -27,11 +27,29 @@ def _install_legacy_pickle_shim() -> None:
             pass
 
 
+def _extract_label(cell):
+    """WM-811K stores labels as [[Center]] — a 1-elem array holding a 1-elem
+    array. Unwrap twice; empty gets 'none'. Also handles already-flat strings.
+    """
+    if isinstance(cell, str):
+        return cell
+    try:
+        if len(cell) == 0:
+            return "none"
+        v = cell[0]
+        if hasattr(v, "__len__") and not isinstance(v, str) and len(v) > 0:
+            return v[0]
+        return v
+    except (TypeError, IndexError):
+        return "none"
+
+
 def load_wm811k(pkl_path: str | Path) -> pd.DataFrame:
     """Load WM-811K pickle and normalize label / column names.
 
     Returns a DataFrame with at least: waferMap, failureType, lotName.
     failureType is coerced to a python string; 'none' is normalized lowercase.
+    Note: the raw pkl has a typo in the split column name — `trianTestLabel`.
     """
     _install_legacy_pickle_shim()
     # LSWMD.pkl was written under Python 2; use latin1 for byte-string compat.
@@ -39,20 +57,20 @@ def load_wm811k(pkl_path: str | Path) -> pd.DataFrame:
     with open(pkl_path, "rb") as f:
         df = pickle.load(f, encoding="latin1")
 
-    # WM-811K columns sometimes come nested as 1-element arrays
-    def _flatten(cell):
-        if isinstance(cell, (list, np.ndarray)) and len(cell) == 1:
-            return cell[0]
-        return cell
-
-    for col in ("failureType", "trainTestLabel", "lotName"):
+    if "failureType" in df.columns:
+        df["failureType"] = df["failureType"].apply(_extract_label)
+    for col in ("trianTestLabel", "trainTestLabel"):  # keep original typo variant
         if col in df.columns:
-            df[col] = df[col].apply(_flatten)
+            df[col] = df[col].apply(_extract_label)
 
-    # Keep only rows with a known failureType label
+    # Keep only rows with a valid string failureType
     df = df[df["failureType"].apply(lambda x: isinstance(x, str) and len(x) > 0)]
     df["failureType"] = df["failureType"].str.strip()
     df.loc[df["failureType"].str.lower() == "none", "failureType"] = "none"
+
+    print(f"[load_wm811k] rows after label unwrap: {len(df)}")
+    print(f"[load_wm811k] failureType distribution:\n"
+          f"{df['failureType'].value_counts().to_string()}")
 
     return df.reset_index(drop=True)
 
