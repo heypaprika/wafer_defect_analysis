@@ -34,7 +34,10 @@ def load_wm811k(pkl_path: str | Path) -> pd.DataFrame:
     failureType is coerced to a python string; 'none' is normalized lowercase.
     """
     _install_legacy_pickle_shim()
-    df = pd.read_pickle(pkl_path)
+    # LSWMD.pkl was written under Python 2; use latin1 for byte-string compat.
+    import pickle
+    with open(pkl_path, "rb") as f:
+        df = pickle.load(f, encoding="latin1")
 
     # WM-811K columns sometimes come nested as 1-element arrays
     def _flatten(cell):
