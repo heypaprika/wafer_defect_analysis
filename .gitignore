@@ -1,0 +1,28 @@
+# Data & models (never commit)
+data/raw/*
+data/interim/*
+data/processed/*
+!data/**/.gitkeep
+models/*
+!models/.gitkeep
+reports/figures/*
+!reports/figures/.gitkeep
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ipynb_checkpoints/
+
+# Env
+.venv/
+venv/
+.env
+.env.*
+
+# OS / editors
+.DS_Store
+.idea/
+.vscode/

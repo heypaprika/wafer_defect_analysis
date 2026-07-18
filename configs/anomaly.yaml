@@ -1,0 +1,42 @@
+seed: 42
+device: auto
+
+data:
+  raw_path: data/raw/LSWMD.pkl
+  processed_dir: data/processed/wm811k_anomaly
+  image_size: 64
+  min_pixels: 100
+
+split:
+  test_size: 0.15
+  val_size: 0.15
+  group_col: lotName
+
+# Train autoencoder on 'none' only. Evaluate anomaly score on held-out
+# defect classes -> treat all defects as positive class for AUROC.
+train_class: none
+positive_defect_classes:
+  - Center
+  - Donut
+  - Edge-Loc
+  - Edge-Ring
+  - Loc
+  - Near-full
+  - Random
+  - Scratch
+
+train:
+  epochs: 40
+  batch_size: 256
+  num_workers: 4
+  lr: 1.0e-3
+  weight_decay: 1.0e-5
+  early_stop_patience: 6
+
+model:
+  arch: conv_ae
+  latent_dim: 64
+
+output:
+  ckpt_dir: models/anomaly
+  report_dir: reports/anomaly

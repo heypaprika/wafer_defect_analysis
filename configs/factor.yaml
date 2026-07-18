@@ -1,0 +1,31 @@
+seed: 42
+
+data:
+  features_path: data/raw/secom.data
+  labels_path: data/raw/secom_labels.data
+  processed_dir: data/processed/secom
+
+preprocess:
+  # SECOM has ~5% missing and many near-constant sensors
+  drop_variance_threshold: 1.0e-4
+  imputation: median          # median | mean | knn
+  scaler: standard            # standard | robust | none
+
+split:
+  test_size: 0.2
+  stratify: true              # SECOM is binary and imbalanced (~7% pass)
+
+model:
+  type: gbdt                  # gbdt (sklearn GradientBoosting) — SHAP-friendly
+  n_estimators: 300
+  max_depth: 3
+  learning_rate: 0.05
+  subsample: 0.8
+
+explain:
+  top_k: 15
+  shap_summary: true
+
+output:
+  report_dir: reports/factor
+  suspects_csv: reports/factor/suspect_factors.csv
