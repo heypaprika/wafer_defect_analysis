@@ -30,10 +30,20 @@ class FocalLoss(nn.Module):
         return loss
 
 
-def compute_class_weights(labels: np.ndarray, num_classes: int) -> np.ndarray:
-    """Inverse-frequency weights, normalized so they average to 1."""
+def compute_class_weights(labels: np.ndarray, num_classes: int,
+                          mode: str = "sqrt_inverse") -> np.ndarray:
+    """Class weights normalized so they average to 1.
+
+    mode="inverse":       w_c ~ 1 / n_c        (extreme when ratios > 100)
+    mode="sqrt_inverse":  w_c ~ 1 / sqrt(n_c)  (moderate; preferred default)
+    """
     counts = np.bincount(labels.astype(int), minlength=num_classes).astype(np.float64)
     counts = np.where(counts == 0, 1.0, counts)  # avoid div/0 for absent classes
-    inv = 1.0 / counts
-    w = inv * (num_classes / inv.sum())
+    if mode == "inverse":
+        raw = 1.0 / counts
+    elif mode == "sqrt_inverse":
+        raw = 1.0 / np.sqrt(counts)
+    else:
+        raise ValueError(f"unknown weight mode: {mode}")
+    w = raw * (num_classes / raw.sum())
     return w.astype(np.float32)

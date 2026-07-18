@@ -36,9 +36,10 @@ train:
   early_stop_patience: 5
 
 loss:
-  type: focal           # focal | ce
+  type: focal              # focal | ce
   gamma: 2.0
   class_weight: balanced   # balanced | none | list of floats
+  weight_mode: sqrt_inverse  # inverse | sqrt_inverse — sqrt avoids over-correction
 
 model:
   arch: resnet18        # resnet18 | resnet34

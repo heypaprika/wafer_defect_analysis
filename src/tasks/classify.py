@@ -11,6 +11,7 @@ import numpy as np
 import pandas as pd
 import torch
 from torch.utils.data import DataLoader
+from torchvision.transforms import Compose, RandomHorizontalFlip, RandomVerticalFlip
 from tqdm import tqdm
 
 from src.data.load_wm811k import WaferMapDataset, load_wm811k
@@ -27,6 +28,20 @@ from src.models.losses import FocalLoss, compute_class_weights
 from src.utils.config import parse_args_and_load
 from src.utils.seed import resolve_device, set_seed
 from src.utils.viz import plot_confusion
+
+
+class RandomRot90:
+    """Discrete 90° rotation. Wafer maps are circular so this preserves labels
+    exactly; using torch.rot90 avoids any interpolation of the 3-value pixels.
+    """
+
+    def __call__(self, x: torch.Tensor) -> torch.Tensor:
+        k = int(torch.randint(0, 4, (1,)).item())
+        return x if k == 0 else torch.rot90(x, k, dims=[-2, -1])
+
+
+def _train_transform() -> Compose:
+    return Compose([RandomHorizontalFlip(), RandomVerticalFlip(), RandomRot90()])
 
 
 def _prepare(cfg) -> tuple[np.ndarray, np.ndarray, dict]:
@@ -59,8 +74,8 @@ def _prepare(cfg) -> tuple[np.ndarray, np.ndarray, dict]:
     return maps, labels, {"train": tr, "val": va, "test": te}
 
 
-def _loader(maps, labels, idx, batch_size, num_workers, shuffle):
-    ds = WaferMapDataset(maps[idx], labels[idx])
+def _loader(maps, labels, idx, batch_size, num_workers, shuffle, transform=None):
+    ds = WaferMapDataset(maps[idx], labels[idx], transform=transform)
     return DataLoader(ds, batch_size=batch_size, shuffle=shuffle,
                       num_workers=num_workers, pin_memory=True)
 
@@ -95,7 +110,8 @@ def main() -> None:
     num_classes = len(cfg.labels.classes)
 
     train_loader = _loader(maps, labels, splits["train"],
-                           cfg.train.batch_size, cfg.train.num_workers, True)
+                           cfg.train.batch_size, cfg.train.num_workers, True,
+                           transform=_train_transform())
     val_loader = _loader(maps, labels, splits["val"],
                          cfg.train.batch_size, cfg.train.num_workers, False)
     test_loader = _loader(maps, labels, splits["test"],
@@ -105,10 +121,15 @@ def main() -> None:
                       in_channels=cfg.model.in_channels,
                       pretrained=cfg.model.pretrained).to(device)
 
-    # Loss: focal with balanced class weights unless overridden
+    # Loss: focal with class weights unless overridden.
+    # Default weight mode is sqrt_inverse — plain inverse frequency over-corrects
+    # here (Near-full:none is ~1:1000, giving pure-inverse weights a ~30x
+    # dominance that makes the model refuse to predict 'none').
     alpha = None
+    weight_mode = getattr(cfg.loss, "weight_mode", "sqrt_inverse")
     if cfg.loss.class_weight == "balanced":
-        w = compute_class_weights(labels[splits["train"]], num_classes)
+        w = compute_class_weights(labels[splits["train"]], num_classes,
+                                  mode=weight_mode)
         alpha = torch.from_numpy(w).to(device)
     elif isinstance(cfg.loss.class_weight, list):
         alpha = torch.tensor(cfg.loss.class_weight, dtype=torch.float32, device=device)

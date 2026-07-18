@@ -29,19 +29,21 @@ def _install_legacy_pickle_shim() -> None:
 
 def _extract_label(cell):
     """WM-811K stores labels as [[Center]] — a 1-elem array holding a 1-elem
-    array. Unwrap twice; empty gets 'none'. Also handles already-flat strings.
+    array. Unwrap twice; empty stays empty ('') so the caller can filter out
+    unlabeled rows (the raw pkl has ~638K unlabeled wafers we must not
+    confuse with the ~147K truly-labeled 'none').
     """
     if isinstance(cell, str):
         return cell
     try:
         if len(cell) == 0:
-            return "none"
+            return ""
         v = cell[0]
         if hasattr(v, "__len__") and not isinstance(v, str) and len(v) > 0:
             return v[0]
         return v
     except (TypeError, IndexError):
-        return "none"
+        return ""
 
 
 def load_wm811k(pkl_path: str | Path) -> pd.DataFrame:
